@@ -1,4 +1,15 @@
+################################################################################ 
+# This Shiny app creat the system dynamics model and calculate ICER using      #
+# mean/median of parameters.                                                   #
+# Depends on:                                                                  #
+#    02_ui.r                                                                   # 
+# Author:                                                                      #
+#     - Anupong Sirirungreung, <anusiri@g.ucla.edu>                            # 
+################################################################################ 
+
 rm(list = ls())
+
+#### Load libraries ####
 library(shiny)
 library(tidyverse)
 library(deSolve)
@@ -10,8 +21,10 @@ library(scales)
 #### Cohort stratified by age group                  ####
 #### A.0-17, B.18-44, C.45-64, D.65-84, E.>=85 years ####
 #########################################################
+
 NUM_COHORTS <- 5
 NUM_STATES <- 7
+
 #### Set up functions ####
 # Set up stocks #
 Get_stocks <- function(input){
