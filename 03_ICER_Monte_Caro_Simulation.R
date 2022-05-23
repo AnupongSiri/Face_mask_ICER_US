@@ -1,5 +1,16 @@
-#### Moving time for loop in which improve efficiency####
+################################################################################ 
+# This script conducts the Monte Caro simmulation (1000 times) using           #
+# ditribution of parameters given by Bartsch et al.                            #
+#                                                                              # 
+# Author:                                                                      #
+#     - Anupong Sirirungreung, <anusiri@g.ucla.edu>                            # 
+################################################################################
+# Updated patch: Moving time for loop in which improve efficiency              #
+################################################################################
+
 rm(list = ls())
+
+#### Load libraries ####
 library(tidyverse)
 library(triangulr)
 library(mc2d)
@@ -7,20 +18,8 @@ library(ggplot2)
 library(scales)
 library(data.table)
 
-#### Functions ####
-estBetaParams <- function(mu, var) {
-  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
-  beta <- alpha * (1 / mu - 1)
-  return(params = list(alpha = alpha, beta = beta))
-}
-
-estGammaParams <- function(mu, std) {
-  shape <- (mu^2)/(std^2)
-  scale <- (std^2)/mu
-  return(params = list(shape = shape, scale = scale))
-}
-
-#### Cost and QALY calculate function
+#### Define functions ####
+#### Cost and QALY calculate function #### 
 Cost_QALY_cal <- function(df=dt){
   # Collapse age group 65-84 and >=85 years and get number of symptomatic infection
   n_Is <- df %>% filter(SEIR=="Is", Age_group!="Total") %>% select(n)
@@ -270,6 +269,199 @@ Cost_QALY_cal <- function(df=dt){
   return(list(QALY_total=QALY_total, Cost_med=Cost_med, C_fm=C_fm))
 }
 
+#### Load comparison dataset ####
+df1<-read.csv("./Mask_ICER_output/Export_Is_S_Sv_numbers_wFM_US_r1350vf0210Marchcases.csv")
+df0<-read.csv("./Mask_ICER_output/Export_Is_S_Sv_numbers_woFM_US_r1350vf0210Marchcases.csv")
+
+# Trandform dataset to data.table 
+df1 <- data.table(df1)
+df0 <- data.table(df0)
+
+#### Perform Monte Caro simmulation (1000 times) ####
+# Define temporary vectors
+ICER_t <- NULL
+Incre_costs_t <- NULL
+Incre_qaly_t <- NULL
+
+# For loops of Monte Caro simmulation 
+start_time <- Sys.time()
+for (j in 1:1000) {
+  ICER <- NULL
+  Incre_costs <- NULL
+  Incre_qaly <- NULL
+  temp1 <- NULL
+  temp0 <- NULL
+  
+  for (i in seq(10,600,10)) {
+    temp1 <- Cost_QALY_cal(df1[time==i])
+    temp0 <- Cost_QALY_cal(df0[time==i])
+    Cost1 = temp1$Cost_med + temp1$C_fm
+    Cost0 = temp0$Cost_med
+    QALY1 = temp1$QALY_total 
+    QALY0 = temp0$QALY_total
+    ICER[i/10] <- (Cost1-Cost0)/(QALY1-QALY0)
+    Incre_costs[i/10] <- Cost1 - Cost0
+    Incre_qaly[i/10] <- QALY1-QALY0
+    
+  
+  }
+  
+  ICER_t <- c(ICER_t,ICER)
+  Incre_costs_t <- c(Incre_costs_t,Incre_costs)
+  Incre_qaly_t <- c(Incre_qaly_t,Incre_qaly)
+  
+}
+
+# Transform results 
+ICER_m   <- colMeans(matrix(ICER_t, ncol=60, byrow = T))
+ICER_l <- apply(matrix(ICER_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.025)
+ICER_h <- apply(matrix(ICER_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.975)
+
+Incre_costs_m   <- colMeans(matrix(Incre_costs_t, ncol=60, byrow = T))
+Incre_costs_l <- apply(matrix(Incre_costs_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.025)
+Incre_costs_h <- apply(matrix(Incre_costs_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.975)
+
+Incre_qaly_m   <- colMeans(matrix(Incre_qaly_t, ncol=60, byrow = T))
+Incre_qaly_l <- apply(matrix(Incre_qaly_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.025)
+Incre_qaly_h <- apply(matrix(Incre_qaly_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.975)
+
+end_time <- Sys.time()
+end_time - start_time 
+#Took 18.27295 mins for n=200; 1.440377 hours for n=1000; improved for loops get 35.84205 mins for n=1000
+#Tool 1.15 hours for 600 time steps after improving for loops
+
+# Combine results
+ICER_dat <- tibble(time=seq(10,600,10),
+                   ICER_m=ICER_m, ICER_l=ICER_l, ICER_h=ICER_h,
+                   Incre_costs_m=Incre_costs_m, Incre_costs_l=Incre_costs_l, Incre_costs_h=Incre_costs_h,
+                   Incre_qaly_m=Incre_qaly_m, Incre_qaly_l=Incre_qaly_l, Incre_qaly_h=Incre_qaly_h) 
+
+# Export results
+# write.csv(ICER_dat,"./Mask_ICER_output/ICER_Monte_1000_US_r1350vf0210Marchcases.csv", row.names = F)
+
+#### ICER plot with 95% CI band ####
+p3 <- ggplot(data=ICER_dat,  
+             aes(x=time, y=ICER_m)) +
+  geom_ribbon(aes(ymin = ICER_l, ymax = ICER_h), fill="#a6cee3", )+
+  geom_line(size=1, color="#253494")+
+  geom_point(size=2, fill="#f03b20", shape = 21) +
+  geom_hline(yintercept = 50000, size=1, linetype=2) +
+  coord_cartesian(xlim = c(0,600),
+                  ylim = c(-200000,200000)) +
+  scale_y_continuous(labels = comma,
+                     breaks = c(-200000,-100000,0,50000,100000,200000)) +
+  labs(#title = "ICERs", 
+       y = "USD/QALY",
+       x = "Days",
+       caption = "Monte Carlo simulation based on parameter distributions (n = 1000 times)") +
+  theme_bw()
+
+p3
+
+#### Incremental costs plot with 95% CI band ####
+p4 <- ggplot(data=ICER_dat,  
+             aes(x=time, y=Incre_costs_m)) +
+  geom_ribbon(aes(ymin = Incre_costs_l, ymax = Incre_costs_h), fill="#a6cee3", )+
+  geom_line(size=1, color="#253494")+
+  geom_point(size=2, fill="#f03b20", shape = 21) +
+  geom_hline(yintercept = 0, size=1, linetype=2) +
+  coord_cartesian(xlim = c(0,600)) +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Incremental costs", 
+       y     = "USD",
+       x = "Days",
+       caption = "Monte Carlo simulation based on parameter distributions (n = 1000 times)") +
+  theme_bw()
+
+p4
+
+#### Incremental QALYs plot with 95% CI band ####
+p5 <- ggplot(data=ICER_dat,  
+             aes(x=time, y=Incre_qaly_m)) +
+  geom_ribbon(aes(ymin = Incre_qaly_l, ymax = Incre_qaly_h), fill="#a6cee3", )+
+  geom_line(size=1, color="#253494")+
+  geom_point(size=2, fill="#f03b20", shape = 21) +
+  geom_hline(yintercept = 0, size=1, linetype=2) +
+  coord_cartesian(xlim = c(0,600)) +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Incremental QALYs", 
+       y     = "QALYs",
+       x = "Days",
+       caption = "Monte Carlo simulation based on parameter distributions (n = 1000 times)") +
+  theme_bw()
+
+p5
+
+#### Symptomatic infection (Is) plot comparing face mask use and non-face mask use ####
+df0$FaceMask <- "No"
+df1$FaceMask <- "Yes"
+
+df01 <- rbind(df0,df1)
+  
+pIs <- ggplot(df01%>%filter(SEIR=="Is"), 
+              aes(x=time, y=n, 
+                  color=Age_group))+
+  geom_line(aes(linetype=FaceMask),size = 1) + 
+  scale_color_brewer(type="Qualitative",
+                     palette = "Accent") +
+  scale_y_continuous(labels=comma) +
+  scale_x_continuous(limits = c(0,600)) +
+  scale_linetype_manual(values=c(4,1)) +
+  labs(#title = "Symptomatic infection cases by face mask intervention",
+       y="Number of population",
+       x="Days",
+       color="Age group",
+       linetype="Face mask use") +
+  theme_bw()
+
+pIs 
+
+#### Other plots ####
+#### Ratio between vacinated susceptible (Sv) and unvaccinated susceptible (S) and proportion####
+SSv <- df0 %>% filter(SEIR=="S"|SEIR=="Sv") %>%
+  pivot_wider(names_from = SEIR, values_from = n) %>%
+  mutate(SvS_ratio = Sv/S,
+         SvSs_ratio = Sv/(S+Sv))
+# Plot propotion between vacinated susceptible (Sv) and total susceptible
+p_SSv <- ggplot(SSv%>%filter(Age_group=="Total"),aes(x=time, y =SvSs_ratio, color=Age_group)) +
+  geom_line()+
+  ylim(c(0.6,1))
+p_SSv
+# Plot ratio between vacinated susceptible (Sv) and unvaccinated susceptible (S)
+p_SvS <- ggplot(SSv,aes(x=time, y =SvS_ratio, color=Age_group)) +
+  geom_line()
+p_SvS
+
+#### Proportion of acinated susceptible (Sv) and total population ####
+# Total US population
+Total_pop <- c(73039150, 117818671, 83323439, 47453305, 6604958, sum(c(73039150, 117818671, 83323439, 47453305, 6604958)))
+
+SSv$Total_pop <- rep(Total_pop,601)
+
+SSv <- SSv %>% mutate(SvT = Sv/Total_pop)
+
+pVc <- ggplot(SSv,aes(x=time, y =SvT, color=Age_group)) +
+  geom_line()+
+  ylim(c(0,1))
+pVc
+
+#### DO NOT RUN ####
+#### Some useful functions #### 
+# Get parameters for beta distribution
+estBetaParams <- function(mu, var) {
+  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+  beta <- alpha * (1 / mu - 1)
+  return(params = list(alpha = alpha, beta = beta))
+}
+
+# Get parameters for gamma distribution
+estGammaParams <- function(mu, std) {
+  shape <- (mu^2)/(std^2)
+  scale <- (std^2)/mu
+  return(params = list(shape = shape, scale = scale))
+}
+
+# Making ICER table in Kable format
 make_icer_tbl <- function(costs0, costs1, qalys0, qalys1){
   library(kableExtra)
   library(gridExtra)
@@ -308,7 +500,7 @@ make_icer_tbl <- function(costs0, costs1, qalys0, qalys1){
              footnote_as_chunk = TRUE)
 }
 
-
+# Example Monte Caro simulation for ICER calculation 
 ICER_MonteC <- function(dt1=dt1,dt0=dt0){
   ICER <- NULL
   for(i in 1:200){
@@ -320,168 +512,3 @@ ICER_MonteC <- function(dt1=dt1,dt0=dt0){
   }
   return(ICER)
 }
-
-
-
-
-#### Comparison dataset ####
-df1<-read.csv("./Mask_ICER_output/Export_Is_S_Sv_numbers_wFM_US_r1350vf0210Marchcases.csv")
-df0<-read.csv("./Mask_ICER_output/Export_Is_S_Sv_numbers_woFM_US_r1350vf0210Marchcases.csv")
-
-df1 <- data.table(df1)
-df0 <- data.table(df0)
-
-ICER_t <- NULL
-Incre_costs_t <- NULL
-Incre_qaly_t <- NULL
-
-start_time <- Sys.time()
-for (j in 1:1000) {
-  ICER <- NULL
-  Incre_costs <- NULL
-  Incre_qaly <- NULL
-  temp1 <- NULL
-  temp0 <- NULL
-  
-  for (i in seq(10,600,10)) {
-    temp1 <- Cost_QALY_cal(df1[time==i])
-    temp0 <- Cost_QALY_cal(df0[time==i])
-    Cost1 = temp1$Cost_med + temp1$C_fm
-    Cost0 = temp0$Cost_med
-    QALY1 = temp1$QALY_total 
-    QALY0 = temp0$QALY_total
-    ICER[i/10] <- (Cost1-Cost0)/(QALY1-QALY0)
-    Incre_costs[i/10] <- Cost1 - Cost0
-    Incre_qaly[i/10] <- QALY1-QALY0
-    
-  
-  }
-  
-  ICER_t <- c(ICER_t,ICER)
-  Incre_costs_t <- c(Incre_costs_t,Incre_costs)
-  Incre_qaly_t <- c(Incre_qaly_t,Incre_qaly)
-  
-}
-
-ICER_m   <- colMeans(matrix(ICER_t, ncol=60, byrow = T))
-ICER_l <- apply(matrix(ICER_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.025)
-ICER_h <- apply(matrix(ICER_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.975)
-
-Incre_costs_m   <- colMeans(matrix(Incre_costs_t, ncol=60, byrow = T))
-Incre_costs_l <- apply(matrix(Incre_costs_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.025)
-Incre_costs_h <- apply(matrix(Incre_costs_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.975)
-
-Incre_qaly_m   <- colMeans(matrix(Incre_qaly_t, ncol=60, byrow = T))
-Incre_qaly_l <- apply(matrix(Incre_qaly_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.025)
-Incre_qaly_h <- apply(matrix(Incre_qaly_t, ncol=60, byrow = T), 2, FUN=quantile , probs = 0.975)
-
-end_time <- Sys.time()
-end_time - start_time #Took 18.27295 mins for n=200; 1.440377 hours for n=1000; improved for loops get 35.84205 mins for n=1000
-#Tool 1.15 hours for 600 time steps
-ICER_dat <- tibble(time=seq(10,600,10),
-                   ICER_m=ICER_m, ICER_l=ICER_l, ICER_h=ICER_h,
-                   Incre_costs_m=Incre_costs_m, Incre_costs_l=Incre_costs_l, Incre_costs_h=Incre_costs_h,
-                   Incre_qaly_m=Incre_qaly_m, Incre_qaly_l=Incre_qaly_l, Incre_qaly_h=Incre_qaly_h) 
-
-write.csv(ICER_dat,"./Mask_ICER_output/ICER_Monte_1000_US_r1350vf0210Marchcases.csv", row.names = F)
-
-p3 <- ggplot(data=ICER_dat,  
-             aes(x=time, y=ICER_m)) +
-  geom_ribbon(aes(ymin = ICER_l, ymax = ICER_h), fill="#a6cee3", )+
-  geom_line(size=1, color="#253494")+
-  geom_point(size=2, fill="#f03b20", shape = 21) +
-  geom_hline(yintercept = 50000, size=1, linetype=2) +
-  coord_cartesian(xlim = c(0,600),
-                  ylim = c(-200000,200000)) +
-  scale_y_continuous(labels = comma,
-                     breaks = c(-200000,-100000,0,50000,100000,200000)) +
-  labs(#title = "ICERs", 
-       y = "USD/QALY",
-       x = "Days",
-       caption = "Monte Carlo simulation based on parameter distributions (n = 1000 times)") +
-  theme_bw()
-
-p3
-
-p4 <- ggplot(data=ICER_dat,  
-             aes(x=time, y=Incre_costs_m)) +
-  geom_ribbon(aes(ymin = Incre_costs_l, ymax = Incre_costs_h), fill="#a6cee3", )+
-  geom_line(size=1, color="#253494")+
-  geom_point(size=2, fill="#f03b20", shape = 21) +
-  geom_hline(yintercept = 0, size=1, linetype=2) +
-  coord_cartesian(xlim = c(0,600)) +
-  scale_y_continuous(labels = comma) +
-  labs(title = "Incremental costs", 
-       y     = "USD",
-       x = "Days",
-       caption = "Monte Carlo simulation based on parameter distributions (n = 1000 times)") +
-  theme_bw()
-
-p4
-
-p5 <- ggplot(data=ICER_dat,  
-             aes(x=time, y=Incre_qaly_m)) +
-  geom_ribbon(aes(ymin = Incre_qaly_l, ymax = Incre_qaly_h), fill="#a6cee3", )+
-  geom_line(size=1, color="#253494")+
-  geom_point(size=2, fill="#f03b20", shape = 21) +
-  geom_hline(yintercept = 0, size=1, linetype=2) +
-  coord_cartesian(xlim = c(0,600)) +
-  scale_y_continuous(labels = comma) +
-  labs(title = "Incremental QALYs", 
-       y     = "QALYs",
-       x = "Days",
-       caption = "Monte Carlo simulation based on parameter distributions (n = 1000 times)") +
-  theme_bw()
-
-p5
-
-
-SSv <- df0 %>% filter(SEIR=="S"|SEIR=="Sv") %>%
-  pivot_wider(names_from = SEIR, values_from = n) %>%
-  mutate(SvS_ratio = Sv/S,
-         SvSs_ratio = Sv/(S+Sv))
-
-p_SSv <- ggplot(SSv%>%filter(Age_group=="Total"),aes(x=time, y =SvSs_ratio, color=Age_group)) +
-  geom_line()+
-  ylim(c(0.6,1))
-p_SSv
-
-p_SvS <- ggplot(SSv,aes(x=time, y =SvS_ratio, color=Age_group)) +
-  geom_line()
-p_SvS
-
-Total_pop <- c(73039150, 117818671, 83323439, 47453305, 6604958, sum(c(73039150, 117818671, 83323439, 47453305, 6604958)))
-
-SSv$Total_pop <- rep(Total_pop,601)
-
-SSv <- SSv %>% mutate(SvT = Sv/Total_pop)
-
-pVc <- ggplot(SSv,aes(x=time, y =SvT, color=Age_group)) +
-  geom_line()+
-  ylim(c(0,1))
-pVc
-
-#### Symptomatic infection plot between intervention ####
-df0$FaceMask <- "No"
-df1$FaceMask <- "Yes"
-
-df01 <- rbind(df0,df1)
-  
-pIs <- ggplot(df01%>%filter(SEIR=="Is"), 
-              aes(x=time, y=n, 
-                  color=Age_group))+
-  geom_line(aes(linetype=FaceMask),size = 1) + 
-  scale_color_brewer(type="Qualitative",
-                     palette = "Accent") +
-  scale_y_continuous(labels=comma) +
-  scale_x_continuous(limits = c(0,600)) +
-  scale_linetype_manual(values=c(4,1)) +
-  labs(#title = "Symptomatic infection cases by face mask intervention",
-       y="Number of population",
-       x="Days",
-       color="Age group",
-       linetype="Face mask use") +
-  theme_bw()
-
-pIs 
-
