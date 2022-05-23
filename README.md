@@ -1,4 +1,4 @@
-# Face_mask_ICER_US
+# Face mask ICER US
 Reproducibility study assignment of EPIDEM206 class, Spring 2022 <br />
 Created by Anupong Sirirungreung <br />
 Email: anusiri@g.ucla.edu <br />
