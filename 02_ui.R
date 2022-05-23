@@ -2,7 +2,7 @@
 # This Shiny app creat the system dynamics model and calculate ICER using      #
 # mean/median of parameters.                                                   #
 # Depends on:                                                                  #
-#    01_sever.r                                                                # 
+#    01_server.r                                                               # 
 # Author:                                                                      #
 #     - Anupong Sirirungreung, <anusiri@g.ucla.edu>                            # 
 ################################################################################ 
