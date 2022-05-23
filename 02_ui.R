@@ -1,7 +1,18 @@
+################################################################################ 
+# This Shiny app creat the system dynamics model and calculate ICER using      #
+# mean/median of parameters.                                                   #
+# Depends on:                                                                  #
+#    01_sever.r                                                                # 
+# Author:                                                                      #
+#     - Anupong Sirirungreung, <anusiri@g.ucla.edu>                            # 
+################################################################################ 
+
+#### Load libraries ####
 library(shiny)
 library(shinyWidgets)
 library(plotly)
 
+#### Define Shiny user interface logic ####
 shinyUI(fluidPage(
   
     titlePanel("US COVID-19 SEIR"),
@@ -26,6 +37,7 @@ shinyUI(fluidPage(
             ),
             column(width=4,
                    
+                   # Initial stocks, number of population stratified by age group
                    h4(div(HTML("<em>No. of symptomatic infected...</em>"))),
                    numericInput("Is_A_value", "Among 0-17 years: ", round(((0.2+0.2+0.3+0.6)/4)*73039150/100000), min = 0, max = 12860865),
                    numericInput("Is_B_value", "Among 18-44 years: ", round(((1.4+2.4+3.3)/3)*117818671/100000), min = 0, max = 25105265),
@@ -33,6 +45,7 @@ shinyUI(fluidPage(
                    numericInput("Is_D_value", "Among 65-84 years: ", round((3.8)*47453305/100000), min = 0, max = 7359568),
                    numericInput("Is_E_value", "Among >=85 years: ", round((3.8)*6604958/100000), min = 0, max = 826013),
                    
+                   # Initial vaccince coverage proportions by age group
                    h4(div(HTML("<em>Vaccination coverage...</em>"))),
                    sliderInput("vc_A_value", "Among 0-17 years: ", 0, 1, 0, step=0.01),
                    sliderInput("vc_B_value", "Among 18-44 years: ", 0, 1, 0, step=0.01),
@@ -45,15 +58,18 @@ shinyUI(fluidPage(
             column(width=4,
                    h4(div(HTML("<em>Graphic parameters...</em>"))),
                    
+                   # Graph parameters
                    sliderInput("xlim", "X-axis limit: ", 0, 600, c(0,600), step=1, post=" days"),
                    sliderInput("ylim", "Y-axis limit: ", 0, 400000000, c(0,400000000), step=100000, post=" pop."),
                    hr(),
                    
+                   # Min-max time (1 day step) to simulate
                    h4(div(HTML("<em>Time point need to get estimated number...</em>"))),
                    numericInput("time_value_min", "Time min:",  0, min = 0, max = 600),
                    numericInput("time_value_max", "Time max:",  600, min = 0, max = 600),
                    hr(),
                    
+                   # Face mask effectiveness (ME) by age group; no face mask use (ME==0)
                    h4(div(HTML("<em>Face mask effectiveness comparison...</em>"))),
                    sliderInput("ME_A_value", "Among 0-17 years: ", 0, 0.4, 0.18, step=0.01),
                    sliderInput("ME_B_value", "Among 18-44 years: ", 0, 0.4, 0.18, step=0.01),
