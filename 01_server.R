@@ -2,7 +2,9 @@
 # This Shiny app creat the system dynamics model and calculate ICER using      #
 # mean/median of parameters.                                                   #
 # Depends on:                                                                  #
-#    02_ui.r                                                                   # 
+#    02_ui.r                                                                   #
+# To run in R using command (online by Gist.github):                           #
+#    library(shiny); runGist("cd7daf9661d390dd24640840b8737723")               #    
 # Author:                                                                      #
 #     - Anupong Sirirungreung, <anusiri@g.ucla.edu>                            # 
 ################################################################################ 
