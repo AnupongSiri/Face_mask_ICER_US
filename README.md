@@ -1,7 +1,7 @@
 # Face_mask_ICER_US
 Reproducibility study assignment of EPIDEM206 class, Spring 2022 <br />
-Created by Anupong Sirirungreung
-Email: anusiri@g.ucla.edu
+Created by Anupong Sirirungreung <br />
+Email: anusiri@g.ucla.edu <br />
 Department of Epidemiology, Fielding School of Public Health, UCLA
 
 # File description
