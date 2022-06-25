@@ -1,5 +1,5 @@
 ################################################################################ 
-# This Shiny app creat the system dynamics model and calculate ICER using      #
+# This Shiny app create the system dynamics model and calculate ICER using     #
 # mean/median of parameters.                                                   #
 # Depends on:                                                                  #
 #    02_ui.r                                                                   #
